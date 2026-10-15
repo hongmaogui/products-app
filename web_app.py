@@ -13,7 +13,7 @@ st.set_page_config(page_title="星辰商品管理AI系统", layout="wide")
 st.title("星辰商品管理AI系统")
 
 # API 后端地址（部署后改成 Render 的地址）
-API_URL = "http://localhost:8000"
+API_URL = "https://products-app-scvx.onrender.com"
 
 # ========== 侧边栏导航 ==========
 
