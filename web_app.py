@@ -8,7 +8,7 @@ import pandas as pd
 st.set_page_config(page_title="laji商品管理系统",layout="wide")
 st.title("laji商品管理系统")
 
-API_URL = "http://localhost:8000"
+API_URL = "https://products-app-scvx.onrender.com"
 
 page = st.sidebar.radio("选择功能",["商品管理","库存管理","销售分析","AI助手"])
 
