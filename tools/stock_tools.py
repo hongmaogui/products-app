@@ -12,6 +12,11 @@ import json
 import traceback
 # 导入时间模块，用于缓存过期判断
 import time
+# 导入 matplotlib，用来画K线图和技术指标图
+import matplotlib.pyplot as plt
+# 设置中文字体，避免中文显示为方块
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
 
 # ========== 数据缓存 ==========
 # 缓存结构：{"data": DataFrame, "timestamp": 时间戳}
@@ -571,3 +576,232 @@ def get_technical_analysis(symbol: str, period: str = "daily", days: int = 60) -
 
     except Exception as e:
         return f"获取技术指标失败：{str(e)}\n{traceback.format_exc()}"
+
+
+# ========== 图表生成函数 ==========
+# 这些函数返回 matplotlib Figure 对象，可以在 Streamlit 中用 st.pyplot() 显示
+
+def get_kline_chart(symbol: str, days: int = 60) -> plt.Figure:
+    """
+    生成K线图（含MA5/10/20均线）
+    参数 symbol: 股票代码
+    参数 days: 显示最近多少天
+    返回: matplotlib Figure 对象
+    """
+    # 获取历史数据
+    df = ak.stock_zh_a_hist(
+        symbol=symbol,
+        period="daily",
+        start_date="20200101",
+        end_date="20261231",
+        adjust="qfq"
+    )
+    df = df.tail(days).copy()
+
+    # 计算均线
+    df["MA5"] = df["收盘"].rolling(window=5).mean()
+    df["MA10"] = df["收盘"].rolling(window=10).mean()
+    df["MA20"] = df["收盘"].rolling(window=20).mean()
+
+    # 创建图表
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # 画K线（用收盘价折线简化）
+    ax.plot(df["日期"], df["收盘"], label="收盘价", linewidth=1.5, color="black")
+    ax.plot(df["日期"], df["MA5"], label="MA5", linewidth=1, color="orange")
+    ax.plot(df["日期"], df["MA10"], label="MA10", linewidth=1, color="blue")
+    ax.plot(df["日期"], df["MA20"], label="MA20", linewidth=1, color="purple")
+
+    # 填充均线之间区域（多头/空头可视化）
+    ax.fill_between(df["日期"], df["MA5"], df["MA20"],
+                     where=df["MA5"] >= df["MA20"],
+                     alpha=0.1, color="red", label="多头区域")
+    ax.fill_between(df["日期"], df["MA5"], df["MA20"],
+                     where=df["MA5"] < df["MA20"],
+                     alpha=0.1, color="green", label="空头区域")
+
+    ax.set_title(f"{symbol} K线图与均线", fontsize=14)
+    ax.set_xlabel("日期")
+    ax.set_ylabel("价格（元）")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # 旋转x轴标签
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    return fig
+
+
+def get_macd_chart(symbol: str, days: int = 60) -> plt.Figure:
+    """
+    生成MACD指标图（DIF、DEA、MACD柱）
+    参数 symbol: 股票代码
+    参数 days: 显示最近多少天
+    返回: matplotlib Figure 对象
+    """
+    # 获取历史数据
+    df = ak.stock_zh_a_hist(
+        symbol=symbol,
+        period="daily",
+        start_date="20200101",
+        end_date="20261231",
+        adjust="qfq"
+    )
+    df = df.tail(days).copy()
+
+    # 计算MACD
+    ema12 = df["收盘"].ewm(span=12, adjust=False).mean()
+    ema26 = df["收盘"].ewm(span=26, adjust=False).mean()
+    df["DIF"] = ema12 - ema26
+    df["DEA"] = df["DIF"].ewm(span=9, adjust=False).mean()
+    df["MACD"] = (df["DIF"] - df["DEA"]) * 2
+
+    # 创建图表
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    # 画DIF和DEA线
+    ax.plot(df["日期"], df["DIF"], label="DIF", linewidth=1.5, color="blue")
+    ax.plot(df["日期"], df["DEA"], label="DEA", linewidth=1.5, color="orange")
+
+    # 画MACD柱（红涨绿跌）
+    colors = ["red" if v >= 0 else "green" for v in df["MACD"]]
+    ax.bar(df["日期"], df["MACD"], color=colors, alpha=0.5, label="MACD柱")
+
+    # 零轴
+    ax.axhline(y=0, color="black", linewidth=0.5)
+
+    ax.set_title(f"{symbol} MACD指标", fontsize=14)
+    ax.set_xlabel("日期")
+    ax.set_ylabel("MACD值")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    return fig
+
+
+def get_kdj_chart(symbol: str, days: int = 60) -> plt.Figure:
+    """
+    生成KDJ指标图（K、D、J线）
+    参数 symbol: 股票代码
+    参数 days: 显示最近多少天
+    返回: matplotlib Figure 对象
+    """
+    # 获取历史数据
+    df = ak.stock_zh_a_hist(
+        symbol=symbol,
+        period="daily",
+        start_date="20200101",
+        end_date="20261231",
+        adjust="qfq"
+    )
+    df = df.tail(days).copy()
+
+    # 计算KDJ
+    low_list = df["最低"].rolling(window=9, min_periods=9).min()
+    high_list = df["最高"].rolling(window=9, min_periods=9).max()
+    rsv = (df["收盘"] - low_list) / (high_list - low_list) * 100
+
+    k_values = []
+    d_values = []
+    j_values = []
+    prev_k = 50
+    prev_d = 50
+
+    for rsv_val in rsv:
+        if pd.isna(rsv_val):
+            k_values.append(prev_k)
+            d_values.append(prev_d)
+            j_values.append(3 * prev_k - 2 * prev_d)
+        else:
+            k = 2/3 * prev_k + 1/3 * rsv_val
+            d = 2/3 * prev_d + 1/3 * k
+            j = 3 * k - 2 * d
+            k_values.append(k)
+            d_values.append(d)
+            j_values.append(j)
+            prev_k = k
+            prev_d = d
+
+    df["K"] = k_values
+    df["D"] = d_values
+    df["J"] = j_values
+
+    # 创建图表
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    ax.plot(df["日期"], df["K"], label="K", linewidth=1.5, color="blue")
+    ax.plot(df["日期"], df["D"], label="D", linewidth=1.5, color="orange")
+    ax.plot(df["日期"], df["J"], label="J", linewidth=1.5, color="purple")
+
+    # 超买超卖区域
+    ax.axhline(y=80, color="red", linewidth=0.5, linestyle="--", label="超买线(80)")
+    ax.axhline(y=20, color="green", linewidth=0.5, linestyle="--", label="超卖线(20)")
+
+    ax.set_title(f"{symbol} KDJ指标", fontsize=14)
+    ax.set_xlabel("日期")
+    ax.set_ylabel("KDJ值")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    return fig
+
+
+def get_rsi_chart(symbol: str, days: int = 60) -> plt.Figure:
+    """
+    生成RSI指标图（RSI6、RSI12、RSI24）
+    参数 symbol: 股票代码
+    参数 days: 显示最近多少天
+    返回: matplotlib Figure 对象
+    """
+    # 获取历史数据
+    df = ak.stock_zh_a_hist(
+        symbol=symbol,
+        period="daily",
+        start_date="20200101",
+        end_date="20261231",
+        adjust="qfq"
+    )
+    df = df.tail(days).copy()
+
+    # 计算RSI
+    def calc_rsi(series, period):
+        delta = series.diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))
+
+    df["RSI6"] = calc_rsi(df["收盘"], 6)
+    df["RSI12"] = calc_rsi(df["收盘"], 12)
+    df["RSI24"] = calc_rsi(df["收盘"], 24)
+
+    # 创建图表
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    ax.plot(df["日期"], df["RSI6"], label="RSI6", linewidth=1.5, color="blue")
+    ax.plot(df["日期"], df["RSI12"], label="RSI12", linewidth=1.5, color="orange")
+    ax.plot(df["日期"], df["RSI24"], label="RSI24", linewidth=1.5, color="purple")
+
+    # 超买超卖区域
+    ax.axhline(y=70, color="red", linewidth=0.5, linestyle="--", label="超买线(70)")
+    ax.axhline(y=30, color="green", linewidth=0.5, linestyle="--", label="超卖线(30)")
+
+    ax.set_title(f"{symbol} RSI指标", fontsize=14)
+    ax.set_xlabel("日期")
+    ax.set_ylabel("RSI值")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    return fig
