@@ -114,10 +114,11 @@ with col1:
     chart_symbol = st.text_input("股票代码", value="000001", help="输入6位股票代码，如000001、600519")
 
 with col2:
-    chart_type = st.selectbox(
-        "图表类型",
+    chart_types = st.multiselect(
+        "图表类型（可多选）",
         ["K线图与均线", "MACD指标", "KDJ指标", "RSI指标"],
-        help="选择要查看的技术指标图表"
+        default=["K线图与均线"],
+        help="可多选，同时生成多个图表"
     )
 
 with col3:
@@ -125,28 +126,31 @@ with col3:
 
 # 生成图表按钮
 if st.button("生成图表", use_container_width=True):
-    try:
-        from tools.stock_tools import get_kline_chart, get_macd_chart, get_kdj_chart, get_rsi_chart
-        import streamlit as st
+    if not chart_types:
+        st.warning("请至少选择一个图表类型")
+    else:
+        try:
+            from tools.stock_tools import get_kline_chart, get_macd_chart, get_kdj_chart, get_rsi_chart
 
-        with st.spinner("正在生成图表..."):
-            # 根据选择的图表类型调用对应函数
-            if chart_type == "K线图与均线":
-                fig = get_kline_chart(chart_symbol, chart_days)
-            elif chart_type == "MACD指标":
-                fig = get_macd_chart(chart_symbol, chart_days)
-            elif chart_type == "KDJ指标":
-                fig = get_kdj_chart(chart_symbol, chart_days)
-            elif chart_type == "RSI指标":
-                fig = get_rsi_chart(chart_symbol, chart_days)
+            # 图表类型到函数的映射
+            chart_func_map = {
+                "K线图与均线": get_kline_chart,
+                "MACD指标": get_macd_chart,
+                "KDJ指标": get_kdj_chart,
+                "RSI指标": get_rsi_chart,
+            }
 
-            # 显示图表
-            st.pyplot(fig)
-            st.success(f"已生成 {chart_symbol} 的{chart_type}（最近{chart_days}天）")
+            # 循环生成所有选中的图表
+            for chart_type in chart_types:
+                with st.spinner(f"正在生成{chart_type}..."):
+                    fig = chart_func_map[chart_type](chart_symbol, chart_days)
+                    st.pyplot(fig)
 
-    except Exception as e:
-        st.error(f"生成图表失败：{str(e)}")
-        st.info("请检查股票代码是否正确（6位数字），或后端服务是否启动")
+            st.success(f"已生成 {chart_symbol} 的 {len(chart_types)} 个图表（最近{chart_days}天）")
+
+        except Exception as e:
+            st.error(f"生成图表失败：{str(e)}")
+            st.info("请检查股票代码是否正确（6位数字），或后端服务是否启动")
 
 # ===== 对话历史 =====
 # 用 session_state 存储对话历史，实现多轮对话
