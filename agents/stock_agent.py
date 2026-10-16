@@ -1,6 +1,13 @@
 # ========== 股票智能问答 Agent ==========
 # 基于 LangChain + 智谱AI，能理解自然语言并自动调用股票工具
 
+# 导入 os 模块，用来读取环境变量
+import os
+# 导入 dotenv，用来从 .env 文件加载配置
+from dotenv import load_dotenv
+# 加载 .env 文件中的环境变量（自动查找项目根目录的 .env）
+load_dotenv()
+
 # 导入 LangChain 的 ChatOpenAI，用来调用智谱AI大模型
 from langchain_openai import ChatOpenAI
 # 导入 @tool 装饰器，把普通函数变成 Agent 可识别的工具
@@ -162,13 +169,13 @@ stock_system_prompt = """
 """
 
 # 创建智谱AI大模型实例
-# 用 ChatOpenAI + base_url 指向智谱AI的API（跟 ai_agent.py 保持一致）
+# 从 .env 文件读取配置，避免硬编码敏感信息
 # model="glm-4-flash" 是免费模型，速度快，适合工具调用场景
 # temperature=0.1 表示回答尽量确定、不随意发挥（查数据需要准确）
 stock_llm = ChatOpenAI(
-    model="glm-4-flash",
-    base_url="https://open.bigmodel.cn/api/paas/v4/",
-    api_key="0f5150f6824b46798493bad132e9e981.KlIXMBcsTBD3mm8z",
+    model=os.getenv("ZHIPU_MODEL", "glm-4-flash"),
+    base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/"),
+    api_key=os.getenv("ZHIPU_API_KEY"),
     temperature=0.1,
 )
 

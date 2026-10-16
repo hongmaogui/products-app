@@ -17,6 +17,10 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from PyPDF2 import PdfReader
 from io import BytesIO
 import os
+# 导入 dotenv，用来从 .env 文件加载配置
+from dotenv import load_dotenv
+# 加载 .env 文件中的环境变量
+load_dotenv()
 
 # ========== 初始化依赖 ==========
 
@@ -28,11 +32,11 @@ CHROMA_PATH = os.path.join(BASE_DIR, "data", "rag_docs")
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 rag_collection = chroma_client.get_or_create_collection(name="tech_docs")
 
-# 智谱 AI 大模型
+# 智谱 AI 大模型（从 .env 读取配置）
 llm = ChatOpenAI(
-    base_url="https://open.bigmodel.cn/api/paas/v4",
-    model="glm-4-flash",
-    api_key="0f5150f6824b46798493bad132e9e981.KlIXMBcsTBD3mm8z",
+    base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
+    model=os.getenv("ZHIPU_MODEL", "glm-4-flash"),
+    api_key=os.getenv("ZHIPU_API_KEY"),
 )
 
 # ========== 创建路由 ==========

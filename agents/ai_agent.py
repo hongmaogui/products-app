@@ -1,3 +1,10 @@
+# 导入 os 模块，用来读取环境变量
+import os
+# 导入 dotenv，用来从 .env 文件加载配置
+from dotenv import load_dotenv
+# 加载 .env 文件中的环境变量
+load_dotenv()
+
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
@@ -80,9 +87,9 @@ def get_stats() -> str:
         db.close()
 
 llm = ChatOpenAI(
-    model="glm-4-flash",
-    base_url="https://open.bigmodel.cn/api/paas/v4/",
-    api_key="0f5150f6824b46798493bad132e9e981.KlIXMBcsTBD3mm8z"
+    model=os.getenv("ZHIPU_MODEL", "glm-4-flash"),
+    base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/"),
+    api_key=os.getenv("ZHIPU_API_KEY")
 )
 
 agent = create_react_agent(llm,tools=[query_product,list_products,check_inventory,get_sales_data,get_stats])
