@@ -4,11 +4,13 @@
 import streamlit as st
 import requests
 
-# API 地址（自动检测环境）
+# API 地址（优先从 Streamlit Secrets 读取，否则用本地地址）
 import os
-if os.getenv("STREAMLIT_RUNTIME"):
-    API_URL = "https://products-app-scvx.onrender.com"
-else:
+try:
+    # Streamlit Cloud Secrets（在 Secrets 设置页配置）
+    API_URL = st.secrets["API_URL"]
+except:
+    # 本地运行时用 localhost
     API_URL = "http://localhost:8000"
 
 # 页面标题
