@@ -18,6 +18,7 @@ from tools.stock_tools import (
     get_sector_performance,   # 查板块行情
     get_capital_flow,         # 查资金流向
     get_top_gainers_losers,   # 查涨跌排行
+    get_technical_analysis,   # 查技术指标（MA/MACD/KDJ/RSI）
 )
 
 # ========== 用 @tool 装饰器把函数注册成 Agent 工具 ==========
@@ -106,6 +107,19 @@ def query_top_gainers_losers(top_n: int = 10) -> str:
     return get_top_gainers_losers(top_n)
 
 
+@tool
+def query_technical_analysis(symbol: str, period: str = "daily", days: int = 60) -> str:
+    """
+    查询某只A股的技术指标分析，包括均线系统（MA5/10/20/60）、MACD（金叉/死叉）、
+    KDJ随机指标（超买/超卖）、RSI相对强弱指标。
+    参数 symbol: 6位股票代码，如 "000001"。
+    参数 period: K线周期，"daily"=日线（默认），"weekly"=周线，"monthly"=月线。
+    参数 days: 最近多少天的数据，默认60天。
+    适用场景：用户问"茅台的技术面怎么样"、"平安银行MACD金叉了吗"、"KDJ超买了吗"等技术分析问题。
+    """
+    return get_technical_analysis(symbol, period, days)
+
+
 # ========== 创建 Agent ==========
 
 # 把所有工具放进一个列表，Agent 运行时会自动从中选择
@@ -118,6 +132,7 @@ stock_tools_list = [
     query_sector_performance,   # 工具6：查板块行情
     query_capital_flow,         # 工具7：查资金流向
     query_top_gainers_losers,   # 工具8：查涨跌排行
+    query_technical_analysis,   # 工具9：查技术指标（MA/MACD/KDJ/RSI）
 ]
 
 # 系统提示词：告诉Agent它的角色、能力、以及回答规则
@@ -130,6 +145,7 @@ stock_system_prompt = """
 - 板块行情（行业板块、概念板块涨跌幅排行）
 - 资金流向（主力资金、超大单、大单等净流入）
 - 涨跌排行榜（涨幅榜、跌幅榜）
+- 技术指标分析（MA均线、MACD金叉死叉、KDJ超买超卖、RSI相对强弱）
 
 你的工作流程：
 1. 如果用户提到股票名称但没说代码，先用 search_stock 工具搜索股票代码。
@@ -142,6 +158,7 @@ stock_system_prompt = """
 - 如果用户问的问题超出股票范围，礼貌地告诉他你只能回答A股相关问题。
 - 回答时先给结论，再给数据支撑。
 - 股票代码是6位数字，如 000001、600519。
+- 技术指标分析仅供参考，不构成投资建议，回答时记得提醒用户。
 """
 
 # 创建智谱AI大模型实例

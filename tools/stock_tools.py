@@ -355,3 +355,219 @@ def get_top_gainers_losers(top_n: int = 10) -> str:
 
     except Exception as e:
         return f"查询涨跌排行失败：{str(e)}\n{traceback.format_exc()}"
+
+
+def get_technical_analysis(symbol: str, period: str = "daily", days: int = 60) -> str:
+    """
+    获取股票技术指标分析（MA均线、MACD、KDJ、RSI）
+    参数 symbol: 股票代码，如 "000001"（平安银行）、"600519"（贵州茅台）
+    参数 period: K线周期，"daily"=日线（默认），"weekly"=周线，"monthly"=月线
+    参数 days: 获取最近多少天的数据，默认60天
+    返回: 技术指标分析结果
+    """
+    try:
+        # 获取历史K线数据（前复权）
+        # adjust="qfq" 表示前复权，消除除权除息对价格的影响
+        df = ak.stock_zh_a_hist(
+            symbol=symbol,
+            period=period,
+            start_date="20200101",  # 起始日期，多取一些用于计算指标
+            end_date="20261231",    # 结束日期
+            adjust="qfq"
+        )
+
+        # 只取最近N天数据用于分析
+        df = df.tail(days).copy()
+
+        if df.empty:
+            return f"未获取到股票 {symbol} 的历史数据"
+
+        # 获取最新一天的数据
+        latest = df.iloc[-1]
+        latest_date = latest["日期"]
+        latest_close = latest["收盘"]
+
+        # ========== 1. 计算均线 MA ==========
+        # MA = 最近N天收盘价的平均值
+        # MA5 = 5日均线，MA10 = 10日均线，以此类推
+        df["MA5"] = df["收盘"].rolling(window=5).mean()
+        df["MA10"] = df["收盘"].rolling(window=10).mean()
+        df["MA20"] = df["收盘"].rolling(window=20).mean()
+        df["MA60"] = df["收盘"].rolling(window=60).mean()
+
+        ma5 = df["MA5"].iloc[-1]
+        ma10 = df["MA10"].iloc[-1]
+        ma20 = df["MA20"].iloc[-1]
+        ma60 = df["MA60"].iloc[-1] if not pd.isna(df["MA60"].iloc[-1]) else None
+
+        # 判断均线多头/空头排列
+        # 多头排列：MA5 > MA10 > MA20 > MA60（上涨趋势）
+        # 空头排列：MA5 < MA10 < MA20 < MA60（下跌趋势）
+        if ma5 and ma10 and ma20 and ma60:
+            if ma5 > ma10 > ma20 > ma60:
+                ma_trend = "多头排列（上涨趋势）"
+            elif ma5 < ma10 < ma20 < ma60:
+                ma_trend = "空头排列（下跌趋势）"
+            else:
+                ma_trend = "交叉整理（震荡趋势）️"
+        else:
+            ma_trend = "数据不足"
+
+        # ========== 2. 计算 MACD ==========
+        # MACD = 指数平滑异同移动平均线
+        # DIF = EMA12 - EMA26（快线减慢线）
+        # DEA = DIF的9日EMA（信号线）
+        # MACD柱 = (DIF - DEA) * 2
+        ema12 = df["收盘"].ewm(span=12, adjust=False).mean()
+        ema26 = df["收盘"].ewm(span=26, adjust=False).mean()
+        df["DIF"] = ema12 - ema26
+        df["DEA"] = df["DIF"].ewm(span=9, adjust=False).mean()
+        df["MACD"] = (df["DIF"] - df["DEA"]) * 2
+
+        dif = df["DIF"].iloc[-1]
+        dea = df["DEA"].iloc[-1]
+        macd = df["MACD"].iloc[-1]
+
+        # MACD 金叉/死叉判断
+        # 金叉：DIF 从下向上穿越 DEA（买入信号）
+        # 死叉：DIF 从上向下穿越 DEA（卖出信号）
+        if len(df) >= 2:
+            prev_dif = df["DIF"].iloc[-2]
+            prev_dea = df["DEA"].iloc[-2]
+            if prev_dif <= prev_dea and dif > dea:
+                macd_signal = "金叉（买入信号）"
+            elif prev_dif >= prev_dea and dif < dea:
+                macd_signal = "死叉（卖出信号）"
+            elif dif > dea:
+                macd_signal = "DIF在DEA上方（多头）"
+            else:
+                macd_signal = "DIF在DEA下方（空头）"
+        else:
+            macd_signal = "数据不足"
+
+        # ========== 3. 计算 KDJ ==========
+        # KDJ = 随机指标，用于判断超买超卖
+        # RSV = (收盘价 - N日最低价) / (N日最高价 - N日最低价) * 100
+        # K = RSV的3日移动平均
+        # D = K的3日移动平均
+        # J = 3K - 2D
+        low_list = df["最低"].rolling(window=9, min_periods=9).min()
+        high_list = df["最高"].rolling(window=9, min_periods=9).max()
+        rsv = (df["收盘"] - low_list) / (high_list - low_list) * 100
+
+        # 计算K、D、J值
+        k_values = []
+        d_values = []
+        j_values = []
+
+        # 初始化第一个K、D值
+        prev_k = 50
+        prev_d = 50
+
+        for rsv_val in rsv:
+            if pd.isna(rsv_val):
+                k_values.append(prev_k)
+                d_values.append(prev_d)
+                j_values.append(3 * prev_k - 2 * prev_d)
+            else:
+                # K = 2/3 * 前一日K + 1/3 * 当日RSV
+                k = 2/3 * prev_k + 1/3 * rsv_val
+                # D = 2/3 * 前一日D + 1/3 * 当日K
+                d = 2/3 * prev_d + 1/3 * k
+                # J = 3K - 2D
+                j = 3 * k - 2 * d
+
+                k_values.append(k)
+                d_values.append(d)
+                j_values.append(j)
+
+                prev_k = k
+                prev_d = d
+
+        df["K"] = k_values
+        df["D"] = d_values
+        df["J"] = j_values
+
+        k_val = df["K"].iloc[-1]
+        d_val = df["D"].iloc[-1]
+        j_val = df["J"].iloc[-1]
+
+        # KDJ 超买超卖判断
+        # J > 100：超买区（可能回调）
+        # J < 0：超卖区（可能反弹）
+        if j_val > 100:
+            kdj_signal = "超买区（注意回调风险）"
+        elif j_val < 0:
+            kdj_signal = "超卖区（可能反弹）"
+        elif k_val > d_val:
+            kdj_signal = "K在D上方（偏多）"
+        else:
+            kdj_signal = "K在D下方（偏空）"
+
+        # ========== 4. 计算 RSI ==========
+        # RSI = 相对强弱指标，衡量涨跌力度
+        # RSI = 100 - 100 / (1 + RS)
+        # RS = N日平均涨幅 / N日平均跌幅
+        def calc_rsi(series, period):
+            delta = series.diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            avg_gain = gain.rolling(window=period).mean()
+            avg_loss = loss.rolling(window=period).mean()
+            rs = avg_gain / avg_loss
+            return 100 - (100 / (1 + rs))
+
+        df["RSI6"] = calc_rsi(df["收盘"], 6)
+        df["RSI12"] = calc_rsi(df["收盘"], 12)
+        df["RSI24"] = calc_rsi(df["收盘"], 24)
+
+        rsi6 = df["RSI6"].iloc[-1]
+        rsi12 = df["RSI12"].iloc[-1]
+        rsi24 = df["RSI24"].iloc[-1]
+
+        # RSI 超买超卖判断
+        # RSI > 80：超买
+        # RSI < 20：超卖
+        if rsi6 > 80:
+            rsi_signal = "超买（短期可能回调）"
+        elif rsi6 < 20:
+            rsi_signal = "超卖（短期可能反弹）"
+        else:
+            rsi_signal = "正常区间"
+
+        # ========== 组装返回结果 ==========
+        result = f"股票 {symbol} 技术指标分析（{latest_date}）\n\n"
+        result += f"最新收盘价：{latest_close} 元\n\n"
+
+        result += "【均线系统 MA】\n"
+        result += f"  MA5（5日均线）：{ma5:.2f}\n"
+        result += f"  MA10（10日均线）：{ma10:.2f}\n"
+        result += f"  MA20（20日均线）：{ma20:.2f}\n"
+        if ma60:
+            result += f"  MA60（60日均线）：{ma60:.2f}\n"
+        result += f"  趋势判断：{ma_trend}\n\n"
+
+        result += "【MACD 指标】\n"
+        result += f"  DIF（快线）：{dif:.4f}\n"
+        result += f"  DEA（慢线）：{dea:.4f}\n"
+        result += f"  MACD柱：{macd:.4f}\n"
+        result += f"  信号判断：{macd_signal}\n\n"
+
+        result += "【KDJ 随机指标】\n"
+        result += f"  K值：{k_val:.2f}\n"
+        result += f"  D值：{d_val:.2f}\n"
+        result += f"  J值：{j_val:.2f}\n"
+        result += f"  信号判断：{kdj_signal}\n\n"
+
+        result += "【RSI 相对强弱】\n"
+        result += f"  RSI6（6日）：{rsi6:.2f}\n"
+        result += f"  RSI12（12日）：{rsi12:.2f}\n"
+        result += f"  RSI24（24日）：{rsi24:.2f}\n"
+        result += f"  信号判断：{rsi_signal}\n\n"
+
+        result += "提示：技术指标仅供参考，不构成投资建议"
+
+        return result
+
+    except Exception as e:
+        return f"获取技术指标失败：{str(e)}\n{traceback.format_exc()}"

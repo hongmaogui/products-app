@@ -36,6 +36,7 @@ with st.sidebar:
     - 板块行情：今天哪个板块涨得好？
     - 资金流向：茅台主力资金流向
     - 涨跌排行：今天涨停的股票有哪些
+    - **技术指标**：茅台MACD金叉了吗？KDJ超买了吗？
     """)
 
 # ===== 快捷问题按钮 =====
@@ -80,6 +81,27 @@ with col3:
 with col4:
     if st.button("今天涨停的股票", use_container_width=True):
         st.session_state["stock_auto_q"] = "今天涨幅最大的股票有哪些？"
+
+st.markdown("")  # 间距
+
+# 第三行：技术指标分析
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    if st.button("茅台技术指标分析", use_container_width=True):
+        st.session_state["stock_auto_q"] = "贵州茅台的技术指标怎么样？MA、MACD、KDJ、RSI分析一下"
+
+with col2:
+    if st.button("平安银行MACD金叉了吗", use_container_width=True):
+        st.session_state["stock_auto_q"] = "平安银行的MACD出现金叉了吗？"
+
+with col3:
+    if st.button("宁德时代KDJ超买了吗", use_container_width=True):
+        st.session_state["stock_auto_q"] = "宁德时代的KDJ指标是不是超买了？"
+
+with col4:
+    if st.button("比亚迪均线多头排列吗", use_container_width=True):
+        st.session_state["stock_auto_q"] = "比亚迪的均线系统是多头排列吗？MA5、MA10、MA20、MA60分析一下"
 
 # ===== 对话历史 =====
 # 用 session_state 存储对话历史，实现多轮对话
