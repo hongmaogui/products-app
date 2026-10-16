@@ -1,28 +1,29 @@
 # FastAPI 核心
-fastapi==0.115.0
-uvicorn==0.30.6
+fastapi
+uvicorn
 
 # Streamlit 前端
-streamlit==1.38.0
+streamlit
 
 # LangChain + LangGraph
-langchain==0.3.0
-langchain-core==0.3.0
-langchain-openai==0.2.0
-langgraph==0.2.0
+langchain
+langchain-core
+langchain-openai
+langgraph
 
 # AKShare 股票数据
-akshare==1.14.0
+akshare
 
 # 向量数据库（RAG）
-chromadb==0.5.0
+chromadb
 
 # 环境变量管理
-python-dotenv==1.0.0
+python-dotenv
 
 # 其他依赖
-pandas==2.2.0
-pydantic==2.9.0
-requests==2.32.0
-python-multipart==0.0.9
-matplotlib==3.11.2
+pandas
+pydantic
+requests
+python-multipart
+matplotlib
+PyPDF2
